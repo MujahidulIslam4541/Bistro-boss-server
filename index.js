@@ -1,4 +1,5 @@
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -29,16 +30,65 @@ async function run() {
     const reviewCollection = client.db("BistroDb").collection("review");
     const cardCollection = client.db("BistroDb").collection("cards");
 
+    // jwt token create
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JWT_ACCESS_TOKEN, {
+        expiresIn: "2h",
+      });
+      res.send({ token });
+    });
 
-  // user related api
-    app.post('/users',async(req,res)=>{
-      const users=req.body;
-      const result=await userCollection.insertOne(users)
-      res.send(result)
-    })
+    // check is admin
+    app.get("/users/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({admin});
+    });
 
+    // user related api
+    app.get("/users", async (req, res) => {
+      // console.log(req.headers);
+      const users = req.body;
+      const result = await userCollection.find(users).toArray();
+      res.send(result);
+    });
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      // check existing user
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User Already existing", insertedId: null });
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    });
 
+    // set admin
+    app.patch("/users/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
 
     // menu and reviews collection
     app.get("/menu", async (req, res) => {
@@ -51,27 +101,25 @@ async function run() {
     });
 
     // card related api collection
-    app.post('/carts',async (req,res)=>{
-      const cartItem=req.body;
-      const result=await cardCollection.insertOne(cartItem)
-      res.send(result)
-    })
+    app.post("/carts", async (req, res) => {
+      const cartItem = req.body;
+      const result = await cardCollection.insertOne(cartItem);
+      res.send(result);
+    });
 
-    app.get('/carts',async(req,res)=>{
-      const email=req.query.email;
-      const query={email:email}
-      const result=await cardCollection.find(query).toArray()
-      res.send(result)
-    })
+    app.get("/carts", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
+      const result = await cardCollection.find(query).toArray();
+      res.send(result);
+    });
 
-    app.delete('/carts/:id',async(req,res)=>{
-      const id=req.params.id;
-      const query={_id:new ObjectId(id)}
-      const result=await cardCollection.deleteOne(query)
-      res.send(result)
-    })
-   
-
+    app.delete("/carts/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await cardCollection.deleteOne(query);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
